@@ -1,0 +1,51 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: ap-south-1            # change to your region
+  BACKEND_REPO: task-tracker-backend
+  FRONTEND_REPO: task-tracker-frontend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # CI: build + push images
+      - name: Build and push
+        run: |
+          REGISTRY=${{ steps.ecr.outputs.registry }}
+          docker build -t $REGISTRY/$BACKEND_REPO:latest  ./backend
+          docker build -t $REGISTRY/$FRONTEND_REPO:latest ./frontend
+          docker push $REGISTRY/$BACKEND_REPO:latest
+          docker push $REGISTRY/$FRONTEND_REPO:latest
+
+      # CD: tell both EC2s (found by tag) to pull and run the new images
+      - name: Deploy with SSM
+        run: |
+          REGISTRY=${{ steps.ecr.outputs.registry }}
+          aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=tag:App,Values=task-tracker" \
+            --comment "deploy ${{ github.sha }}" \
+            --parameters commands="[
+              \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REGISTRY\",
+              \"docker pull $REGISTRY/$BACKEND_REPO:latest\",
+              \"docker pull $REGISTRY/$FRONTEND_REPO:latest\",
+              \"docker rm -f backend frontend || true\",
+              \"docker run -d --name backend --restart always -p 5000:5000 --env-file /opt/task-tracker/.env $REGISTRY/$BACKEND_REPO:latest\",
+              \"docker run -d --name frontend --restart always -p 80:80 $REGISTRY/$FRONTEND_REPO:latest\"
+            ]"
