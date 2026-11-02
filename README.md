@@ -1,4 +1,4 @@
-# Task Tracker (3-tier app for AWS practice)
+#* Task Tracker (3-tier app for AWS practice)
 
 React + Nginx (frontend) -> Node.js/Express (backend) -> PostgreSQL
 
