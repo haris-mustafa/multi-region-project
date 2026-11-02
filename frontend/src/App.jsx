@@ -49,7 +49,7 @@ export default function App() {
 
   return (
     <main>
-      <h1>Task Tracker (v3)</h1>
+      <h1>Task Tracker (v4)</h1>
       <p className="sub">{tasks.length ? `${left} of ${tasks.length} left to do` : "Nothing yet"}</p>
 
       <form onSubmit={add}>
